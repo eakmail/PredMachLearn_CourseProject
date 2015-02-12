@@ -1,0 +1,109 @@
+---
+title: "Prediction on Human Activity Dataset"
+author: "Evgeny Kuznetsov"
+output:
+  html_document:
+    keep_md: yes
+---
+
+## Synopsis
+
+This is Practical Machine Learning Course Project. In this project, we predict performing of Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3RLF7zGmr
+
+## Data 
+
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+## Load and cleanup
+
+We have unrecognizable "#DIV/0!" strings in numerical data, which we count as NA:
+
+```{r}
+pml_training <- read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!"))
+pml_testing <- read.csv("pml-testing.csv", na.strings=c("NA", "#DIV/0!"))
+```
+
+Clean out first 7 service information columns and columns with NA:
+
+```{r}
+useful <- (colSums(is.na(pml_training)) == 0)  &  c(rep(FALSE, 7), rep(TRUE, ncol(pml_training) - 7))
+
+pml_useful <- pml_training[,useful]
+final_test_useful <- pml_testing[,useful]
+```
+
+## Partition data
+
+Make data partitions to cross-validate, 60% train data and 40% test data:
+
+```{r}
+library(caret)
+suppressWarnings(library(randomForest))
+
+set.seed(11)
+
+inTrain <- createDataPartition(y=pml_useful$classe, p = 0.6, list= FALSE)
+training <- pml_useful[inTrain,]
+testing <- pml_useful[-inTrain,]
+```
+
+## Train and estimate model perfomance
+
+Use Breiman's random forest algorithm:
+
+```{r cache = TRUE}
+fit <- randomForest(classe ~ . , data = training)
+
+fit
+```
+
+OOB (out of bag) estimate is 0.6% error rate. 
+
+## Cross-validataion
+
+Let's check error rate on testing set:
+
+```{r}
+mean(predict(fit, testing) == testing$classe)
+```
+
+Our error rate is `r round(100 - 100 * mean(predict(fit, testing) == testing$classe), 2)`%. Which is pretty close to 0.6% estimation.
+
+
+```{r}
+confusionMatrix(predict(fit, testing), testing$classe)
+```
+
+Kappa value is 0.991.
+
+## Final results
+
+```{r}
+final_results <- predict(fit, final_test_useful)
+final_results
+```
+
+## Appendix A
+
+Create files for submissions based on provided by instructor code:
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(final_results)
+```
